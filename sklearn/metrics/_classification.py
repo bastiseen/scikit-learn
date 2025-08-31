@@ -1915,6 +1915,208 @@ def precision_recall_fscore_support(
         "y_true": ["array-like", "sparse matrix"],
         "y_pred": ["array-like", "sparse matrix"],
         "labels": ["array-like", None],
+        "pos_label": [Real, str, "boolean", None],
+        "average": [
+            StrOptions({"micro", "macro", "samples", "weighted", "binary"}),
+            None,
+        ],
+        "warn_for": [list, tuple, set],
+        "sample_weight": ["array-like", None],
+        "zero_division": [
+            Options(Real, {0.0, 1.0}),
+            "nan",
+            StrOptions({"warn"}),
+        ],
+    },
+    prefer_skip_nested_validation=True,
+)
+def specificity_support(
+    y_true,
+    y_pred,
+    *,
+    labels=None,
+    pos_label=1,
+    average=None,
+    warn_for=("precision", "recall", "f-score"),
+    sample_weight=None,
+    zero_division="warn",
+):
+    """Compute specifivity and support for the other classes.
+
+    The sensitivity is the ratio ``tn / (tn + fp)`` where ``tn`` is the number of
+    true negatives and ``fp`` the number of false positives. The sensitivity is
+    intuitively the ability of the classifier to find all the negative samples.
+
+    The support is the number of occurrences of each class in ``y_false``.
+
+    Support beyond term:`binary` targets is achieved by treating :term:`multiclass`
+    and :term:`multilabel` data as a collection of binary problems, one for each
+    label. For the :term:`binary` case, setting `average='binary'` will return
+    metrics for `pos_label`. If `average` is not `'binary'`, `pos_label` is ignored
+    and metrics for both classes are computed, then averaged or both returned (when
+    `average=None`). Similarly, for :term:`multiclass` and :term:`multilabel` targets,
+    metrics for all `labels` are either returned or averaged depending on the `average`
+    parameter. Use `labels` specify the set of labels to calculate metrics for.
+
+    Read more in the :ref:`User Guide <precision_recall_f_measure_metrics>`.
+
+    Parameters
+    ----------
+    y_true : 1d array-like, or label indicator array / sparse matrix
+        Ground truth (correct) target values.
+
+    y_pred : 1d array-like, or label indicator array / sparse matrix
+        Estimated targets as returned by a classifier.
+
+    beta : float, default=1.0
+        The strength of recall versus precision in the F-score.
+
+    labels : array-like, default=None
+        The set of labels to include when `average != 'binary'`, and their
+        order if `average is None`. Labels present in the data can be
+        excluded, for example in multiclass classification to exclude a "negative
+        class". Labels not present in the data can be included and will be
+        "assigned" 0 samples. For multilabel targets, labels are column indices.
+        By default, all labels in `y_true` and `y_pred` are used in sorted order.
+
+    pos_label : int, float, bool or str, default=1
+        The class to report if `average='binary'` and the data is binary,
+        otherwise this parameter is ignored.
+        For multiclass or multilabel targets, set `labels=[pos_label]` and
+        `average != 'binary'` to report metrics for one label only.
+
+    average : {'binary', 'micro', 'macro', 'samples', 'weighted'}, \
+            default=None
+        If ``None``, the metrics for each class are returned. Otherwise, this
+        determines the type of averaging performed on the data:
+
+        ``'binary'``:
+            Only report results for the class specified by ``pos_label``.
+            This is applicable only if targets (``y_{true,pred}``) are binary.
+        ``'micro'``:
+            Calculate metrics globally by counting the total true positives,
+            false negatives and false positives.
+        ``'macro'``:
+            Calculate metrics for each label, and find their unweighted
+            mean.  This does not take label imbalance into account.
+        ``'weighted'``:
+            Calculate metrics for each label, and find their average weighted
+            by support (the number of false instances for each label). This
+            alters 'macro' to account for label imbalance.
+        ``'samples'``:
+            Calculate metrics for each instance, and find their average (only
+            meaningful for multilabel classification where this differs from
+            :func:`accuracy_score`).
+
+    warn_for : list, tuple or set, for internal use
+        This determines which warnings will be made in the case that this
+        function is being used to return only one of its metrics.
+
+    sample_weight : array-like of shape (n_samples,), default=None
+        Sample weights.
+
+    zero_division : {"warn", 0.0, 1.0, np.nan}, default="warn"
+        Sets the value to return when there is a zero division:
+           - specificity: when there are no negative labels
+
+        Notes:
+        - If set to "warn", this acts like 0, but a warning is also raised.
+        - If set to `np.nan`, such values will be excluded from the average.
+
+        .. versionadded:: 1.3
+           `np.nan` option was added.
+
+    Returns
+    -------
+    specificity : float (if average is not None) or array of float, shape =\
+        [n_unique_labels]
+        Specificity score.
+
+    support : None (if average is not None) or array of int, shape =\
+        [n_unique_labels]
+        The number of occurrences of each label in ``y_false``.
+
+    Notes
+    -----
+    When ``true positive + false positive == 0``, precision is undefined.
+    When ``true positive + false negative == 0``, recall is undefined. When
+    ``true positive + false negative + false positive == 0``, f-score is
+    undefined. In such cases, by default the metric will be set to 0, and
+    ``UndefinedMetricWarning`` will be raised. This behavior can be modified
+    with ``zero_division``.
+
+    References
+    ----------
+    .. [1] `Wikipedia entry for the specificity
+           <https://en.wikipedia.org/wiki/Precision_and_recall>`_.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from sklearn.metrics import specificity_support
+    >>> y_true = np.array(['cat', 'dog', 'pig', 'cat', 'dog', 'pig'])
+    >>> y_pred = np.array(['cat', 'pig', 'dog', 'cat', 'cat', 'dog'])
+    >>> specificity_support(y_true, y_pred, average='macro')
+    (0.70..., None)
+    >>> specificity_support(y_true, y_pred, average='micro')
+    (0.66..., None)
+    >>> specificity_support(y_true, y_pred, average='weighted')
+    (0.66..., None)
+
+    It is possible to compute per-label precisions, recalls, F1-scores and
+    supports instead of averaging:
+
+    >>> precision_recall_fscore_support(y_true, y_pred, average=None,
+    ... labels=['pig', 'dog', 'cat'])
+    array([1., 0.5 , 0.6]),
+    array([3, 4, 5])
+    """
+    _check_zero_division(zero_division)
+    labels = _check_set_wise_labels(y_true, y_pred, average, labels, pos_label)
+
+    # Calculate tp_sum, pred_sum, true_sum ###
+    samplewise = average == "samples"
+    MCM = multilabel_confusion_matrix(
+        y_true,
+        y_pred,
+        sample_weight=sample_weight,
+        labels=labels,
+        samplewise=samplewise,
+    )
+    tn_sum = MCM[:, 0, 0]
+    false_sum = tn_sum + MCM[:, 0, 1]
+
+    if average == "micro":
+        tn_sum = np.array([tn_sum.sum()])
+        false_sum = np.array([false_sum.sum()])
+
+    # Divide, and on zero-division, set scores and/or warn according to
+    # zero_division:
+    specificity = _prf_divide(
+        tn_sum, false_sum, "specificity", "false", average, warn_for, zero_division
+    )
+
+    # Average the results
+    if average == "weighted":
+        weights = false_sum
+    elif average == "samples":
+        weights = sample_weight
+    else:
+        weights = None
+
+    if average is not None:
+        assert average != "binary" or len(specificity) == 1
+        specificity = _nanaverage(specificity, weights=weights)
+        false_sum = None  # return no support
+
+    return specificity, false_sum
+
+
+@validate_params(
+    {
+        "y_true": ["array-like", "sparse matrix"],
+        "y_pred": ["array-like", "sparse matrix"],
+        "labels": ["array-like", None],
         "sample_weight": ["array-like", None],
         "raise_warning": ["boolean"],
     },
@@ -2086,6 +2288,43 @@ def class_likelihood_ratios(
             negative_likelihood_ratio = neg_num / neg_denom
 
     return positive_likelihood_ratio, negative_likelihood_ratio
+
+
+@validate_params(
+    {
+        "y_true": ["array-like", "sparse matrix"],
+        "y_pred": ["array-like", "sparse matrix"],
+        "labels": ["array-like", None],
+        "pos_label": [Real, str, "boolean", None],
+        "average": [
+            StrOptions({"micro", "macro", "samples", "weighted", "binary"}),
+            None,
+        ],
+        "sample_weight": ["array-like", None],
+        "zero_division": [
+            Options(Real, {0.0, 1.0}),
+            "nan",
+            StrOptions({"warn"}),
+        ],
+    },
+    prefer_skip_nested_validation=True,
+)
+def balanced_matthews_corrcoeff(
+    y_true,
+    y_pred,
+    *,
+    labels=None,
+    pos_label=1,
+    average="binary",
+    sample_weight=None,
+    zero_division="warn",
+):
+    sensitivity = recall_score(y_true, y_pred, labels=labels, pos_label=pos_label, average=average, sample_weight=sample_weight, zero_division=zero_division)
+    specificity, _ = specificity_support(y_true, y_pred, labels=labels, pos_label=pos_label, average=average, sample_weight=sample_weight, zero_division=zero_division)
+    numerator = sensitivity + specificity - 1
+    denominator = np.sqrt(1 - np.square(sensitivity - specificity))
+
+    return numerator / denominator
 
 
 @validate_params(
